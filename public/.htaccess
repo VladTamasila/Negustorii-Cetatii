@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Redirectioneaza toate request-urile catre index.php,
+# cu exceptia fisierelor si directoarelor reale (CSS, JS, imagini etc.)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

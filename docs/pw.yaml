@@ -1,0 +1,1190 @@
+openapi: 3.0.3
+info:
+  title: API Negustorii Cetatii
+  version: 2.4.0
+  description: 'Documentatie OpenAPI aliniata cu implementarea PHP/Slim din Sprint
+    #2.
+
+
+    Aceasta versiune pastreaza endpoint-urile implementate efectiv si adauga si endpoint-urile
+    planificate pentru PUT/DELETE, marcate explicit cu `x-implemented: false`, ca
+    sa fie clar ce exista deja in cod si ce urmeaza sa fie implementat.'
+servers:
+- url: http://localhost:8080
+  description: Rulare locala cu `php -S localhost:8080 -t public`
+tags:
+- name: Utility
+- name: Partide
+- name: Jucatori
+- name: Harta
+- name: Setup
+- name: Mutari
+x-roadmap:
+  planned_endpoints:
+  - PUT /api/partide/{idPartida}
+  - DELETE /api/partide/{idPartida}
+  - PUT /api/partide/{idPartida}/jucatori/{idJucator}
+  - DELETE /api/partide/{idPartida}/jucatori/{idJucator}
+  - GET /api/partide/{idPartida}/jucatori/{idJucator}
+  - GET /api/partide/{idPartida}/mutari/{idMutare}
+  - GET /api/cladiri/catalog
+  - tranzactionare/piata centrala
+  note: 'Endpoint-urile marcate cu x-implemented: false sunt documentate acum pentru
+    completitudinea specificatiei, dar necesita metode noi in controllers/repositories
+    pentru a deveni functionale.'
+paths:
+  /api/ping:
+    get:
+      tags:
+      - Utility
+      summary: Healthcheck simplu
+      operationId: ping
+      responses:
+        '200':
+          description: API disponibil.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+  /api/partide:
+    get:
+      tags:
+      - Partide
+      summary: Obtine lista de partide
+      operationId: listaPartide
+      parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          enum:
+          - in_asteptare
+          - activa
+          - finalizata
+          - arhivata
+      - in: query
+        name: pagina
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - in: query
+        name: dimensiunePagina
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+      responses:
+        '200':
+          description: Lista de partide filtrata/paginata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartideListResponse'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+    post:
+      tags:
+      - Partide
+      summary: Creeaza o partida noua
+      operationId: creeazaPartida
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartidaCreateRequest'
+      responses:
+        '201':
+          description: Partida a fost creata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartidaDetaliata'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+  /api/partide/{idPartida}:
+    get:
+      tags:
+      - Partide
+      summary: Obtine detaliile unei partide
+      operationId: detaliiPartida
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Starea de baza a partidei si jucatorii inscrisi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartidaDetaliata'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+    put:
+      tags:
+      - Partide
+      summary: Actualizeaza o partida
+      description: 'Endpoint planificat pentru Sprint #2 / #3. Permite actualizarea
+        unei partide doar cat timp aceasta este in starea `in_asteptare`.'
+      operationId: actualizeazaPartida
+      x-implemented: false
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartidaUpdateRequest'
+      responses:
+        '200':
+          description: Partida a fost actualizata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartidaDetaliata'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+        '409':
+          $ref: '#/components/responses/ConflictAplicatie'
+    delete:
+      tags:
+      - Partide
+      summary: Sterge o partida
+      description: Endpoint planificat. Pentru varianta simpla, stergerea este permisa
+        doar inainte de startul partidei.
+      operationId: stergePartida
+      x-implemented: false
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '204':
+          description: Partida a fost stearsa.
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+        '409':
+          $ref: '#/components/responses/ConflictAplicatie'
+  /api/partide/{idPartida}/start:
+    post:
+      tags:
+      - Partide
+      summary: Porneste partida
+      description: 'Genereaza harta hexagonala si muta partida din `in_asteptare`
+        in
+
+        faza `asezare_initiala`. In implementarea actuala, toate erorile de stare
+
+        sau lipsa partidei sunt intoarse ca 400 / STARE_INVALIDA.
+
+        '
+      operationId: pornestePartida
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Partida a fost pornita, iar starea actualizata este returnata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartidaDetaliata'
+        '400':
+          $ref: '#/components/responses/StareInvalida'
+  /api/partide/{idPartida}/jucatori:
+    get:
+      tags:
+      - Jucatori
+      summary: Obtine jucatorii unei partide
+      operationId: listaJucatori
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Lista jucatorilor inscrisi in partida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JucatoriListResponse'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+    post:
+      tags:
+      - Jucatori
+      summary: Adauga un jucator intr-o partida
+      description: 'Disponibil doar cat timp partida este in faza de asteptare.
+
+        Daca se trimite o culoare, ea trebuie sa fie una din:
+
+        `albastru`, `rosu`, `verde`, `galben`.
+
+        '
+      operationId: adaugaJucator
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JucatorJoinRequest'
+      responses:
+        '201':
+          description: Jucatorul a fost creat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Jucator'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+        '409':
+          $ref: '#/components/responses/ConflictAplicatie'
+  /api/partide/{idPartida}/jucatori/{idJucator}:
+    put:
+      tags:
+      - Jucatori
+      summary: Actualizeaza un jucator din partida
+      description: Endpoint planificat. Poate fi folosit in lobby pentru schimbarea
+        numelui sau culorii, inainte de startul partidei.
+      operationId: actualizeazaJucator
+      x-implemented: false
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      - $ref: '#/components/parameters/idJucator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JucatorUpdateRequest'
+      responses:
+        '200':
+          description: Jucatorul a fost actualizat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Jucator'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/JucatorInexistent'
+        '409':
+          $ref: '#/components/responses/ConflictAplicatie'
+    delete:
+      tags:
+      - Jucatori
+      summary: Elimina un jucator din partida
+      description: 'Endpoint planificat. Pentru Sprint #2, varianta cea mai simpla
+        este sa permita iesirea din lobby doar inainte de start.'
+      operationId: eliminaJucator
+      x-implemented: false
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      - $ref: '#/components/parameters/idJucator'
+      responses:
+        '204':
+          description: Jucatorul a fost eliminat din partida.
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/JucatorInexistent'
+        '409':
+          $ref: '#/components/responses/ConflictAplicatie'
+  /api/partide/{idPartida}/harta:
+    get:
+      tags:
+      - Harta
+      summary: Obtine harta unei partide
+      description: 'Returneaza toate datele necesare desenarii in UI: hexagoane, varfuri,
+
+        muchii, asezari si drumuri.
+
+        '
+      operationId: hartaPartida
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Structura completa a hartii pentru UI.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HartaResponse'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+  /api/partide/{idPartida}/setup/asezare:
+    post:
+      tags:
+      - Setup
+      summary: Plaseaza asezarea initiala
+      operationId: setupAsezare
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupAsezareRequest'
+      responses:
+        '201':
+          description: Asezarea initiala a fost plasata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupAsezareResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+  /api/partide/{idPartida}/setup/drum:
+    post:
+      tags:
+      - Setup
+      summary: Plaseaza drumul initial
+      operationId: setupDrum
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupDrumRequest'
+      responses:
+        '201':
+          description: Drumul initial a fost plasat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+  /api/partide/{idPartida}/mutari:
+    get:
+      tags:
+      - Mutari
+      summary: Obtine istoricul mutarilor
+      operationId: listaMutari
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Lista mutarilor, cele mai recente primele.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutariListResponse'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+  /api/partide/{idPartida}/mutari/zar:
+    post:
+      tags:
+      - Mutari
+      summary: Arunca zarul
+      operationId: aruncaZarul
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Zarul a fost aruncat si productia a fost aplicata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RollDiceResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+  /api/partide/{idPartida}/mutari/asezare:
+    post:
+      tags:
+      - Mutari
+      summary: Construieste o asezare
+      operationId: construiesteAsezare
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildSettlementRequest'
+      responses:
+        '201':
+          description: Asezarea a fost construita.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildSettlementResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+  /api/partide/{idPartida}/mutari/drum:
+    post:
+      tags:
+      - Mutari
+      summary: Construieste un drum
+      operationId: construiesteDrum
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildRoadRequest'
+      responses:
+        '201':
+          description: Drumul a fost construit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildRoadResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+  /api/partide/{idPartida}/mutari/cetate:
+    post:
+      tags:
+      - Mutari
+      summary: Upgrade de la asezare la cetate
+      operationId: upgradeCetate
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeCityRequest'
+      responses:
+        '200':
+          description: Asezarea a fost transformata in cetate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+  /api/partide/{idPartida}/mutari/paseaza:
+    post:
+      tags:
+      - Mutari
+      summary: Paseaza tura
+      operationId: paseazaTura
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      responses:
+        '200':
+          description: Tura a trecut la urmatorul jucator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PassTurnResponse'
+        '400':
+          $ref: '#/components/responses/MutareInvalida'
+components:
+  parameters:
+    idPartida:
+      name: idPartida
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Identificatorul partidei.
+    idJucator:
+      name: idJucator
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Identificatorul jucatorului.
+  responses:
+    CerereInvalida:
+      description: Cererea nu respecta formatul sau campurile obligatorii.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PartidaInexistenta:
+      description: Partida nu exista.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    StareInvalida:
+      description: Partida nu poate executa operatia ceruta in starea curenta.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictAplicatie:
+      description: Cererea este valida ca forma, dar intra in conflict cu reguli aplicative.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MutareInvalida:
+      description: Mutarea sau actiunea de joc nu este permisa.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    JucatorInexistent:
+      description: Jucatorul nu exista in aceasta partida.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    PingResponse:
+      type: object
+      required:
+      - ok
+      - time
+      properties:
+        ok:
+          type: boolean
+          example: true
+        time:
+          type: string
+          format: date-time
+          example: '2026-04-28T16:10:00+00:00'
+    PartideListResponse:
+      type: object
+      required:
+      - items
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartidaRezumat'
+        total:
+          type: integer
+          example: 1
+    PartidaRezumat:
+      type: object
+      required:
+      - id
+      - nume
+      - status
+      - faza
+      - jucatoriCurenti
+      - jucatoriMaxim
+      properties:
+        id:
+          type: integer
+          example: 1
+        nume:
+          type: string
+          example: Cetatea de Lemn
+        status:
+          type: string
+          enum:
+          - in_asteptare
+          - activa
+          - finalizata
+          - arhivata
+        faza:
+          type: string
+          enum:
+          - in_asteptare
+          - asezare_initiala
+          - joc
+          - finalizata
+        jucatoriCurenti:
+          type: integer
+          example: 2
+        jucatoriMaxim:
+          type: integer
+          example: 4
+    PartidaCreateRequest:
+      type: object
+      required:
+      - nume
+      properties:
+        nume:
+          type: string
+          minLength: 1
+          maxLength: 80
+          example: Partida Demo
+        jucatoriMaxim:
+          type: integer
+          minimum: 2
+          maximum: 4
+          default: 4
+        punctajCastig:
+          type: integer
+          minimum: 5
+          maximum: 20
+          default: 10
+    PartidaDetaliata:
+      type: object
+      required:
+      - id
+      - nume
+      - status
+      - faza
+      - rundaSetup
+      - pasSetup
+      - turaCurenta
+      - jucatoriMaxim
+      - punctajCastig
+      - jucatori
+      properties:
+        id:
+          type: integer
+        nume:
+          type: string
+        status:
+          type: string
+          enum:
+          - in_asteptare
+          - activa
+          - finalizata
+          - arhivata
+        faza:
+          type: string
+          enum:
+          - in_asteptare
+          - asezare_initiala
+          - joc
+          - finalizata
+        rundaSetup:
+          type: integer
+          example: 1
+        pasSetup:
+          type: string
+          enum:
+          - asezare
+          - drum
+        turaCurenta:
+          type: integer
+          example: 0
+        jucatoriMaxim:
+          type: integer
+          example: 4
+        jucatorActivId:
+          type: integer
+          nullable: true
+          example: 1
+        punctajCastig:
+          type: integer
+          example: 10
+        castigatorId:
+          type: integer
+          nullable: true
+          example: null
+        jucatori:
+          type: array
+          items:
+            $ref: '#/components/schemas/Jucator'
+    JucatoriListResponse:
+      type: object
+      required:
+      - items
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Jucator'
+        total:
+          type: integer
+          example: 2
+    JucatorJoinRequest:
+      type: object
+      required:
+      - nume
+      properties:
+        nume:
+          type: string
+          minLength: 1
+          maxLength: 40
+          example: Bianca
+        culoare:
+          type: string
+          nullable: true
+          enum:
+          - albastru
+          - rosu
+          - verde
+          - galben
+    Jucator:
+      type: object
+      required:
+      - id
+      - nume
+      - culoare
+      - ordine
+      - prestigiu
+      - lemn
+      - piatra
+      - aur
+      - grau
+      - lana
+      properties:
+        id:
+          type: integer
+        nume:
+          type: string
+        culoare:
+          type: string
+          nullable: true
+          enum:
+          - albastru
+          - rosu
+          - verde
+          - galben
+        ordine:
+          type: integer
+        prestigiu:
+          type: integer
+        lemn:
+          type: integer
+        piatra:
+          type: integer
+        aur:
+          type: integer
+        grau:
+          type: integer
+        lana:
+          type: integer
+    HartaResponse:
+      type: object
+      required:
+      - hexSize
+      - hexagoane
+      - varfuri
+      - muchii
+      - asezari
+      - drumuri
+      properties:
+        hexSize:
+          type: number
+          format: float
+          example: 48
+        hexagoane:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hexagon'
+        varfuri:
+          type: array
+          items:
+            $ref: '#/components/schemas/Varf'
+        muchii:
+          type: array
+          items:
+            $ref: '#/components/schemas/Muchie'
+        asezari:
+          type: array
+          items:
+            $ref: '#/components/schemas/AsezareMap'
+        drumuri:
+          type: array
+          items:
+            $ref: '#/components/schemas/DrumMap'
+    Hexagon:
+      type: object
+      required:
+      - id
+      - q
+      - r
+      - terrain
+      - numarToken
+      - varfuriIds
+      properties:
+        id:
+          type: integer
+        q:
+          type: integer
+        r:
+          type: integer
+        terrain:
+          type: string
+          enum:
+          - padure
+          - deal
+          - munte
+          - camp
+          - pasune
+          - desert
+        numarToken:
+          type: integer
+          nullable: true
+          example: 8
+        varfuriIds:
+          type: array
+          items:
+            type: integer
+    Varf:
+      type: object
+      required:
+      - id
+      - x
+      - y
+      properties:
+        id:
+          type: integer
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+    Muchie:
+      type: object
+      required:
+      - id
+      - varfAId
+      - varfBId
+      properties:
+        id:
+          type: integer
+        varfAId:
+          type: integer
+        varfBId:
+          type: integer
+    AsezareMap:
+      type: object
+      required:
+      - id
+      - idVarf
+      - idJucator
+      - jucator
+      - culoare
+      - tip
+      properties:
+        id:
+          type: integer
+        idVarf:
+          type: integer
+        idJucator:
+          type: integer
+        jucator:
+          type: string
+        culoare:
+          type: string
+          nullable: true
+        tip:
+          type: string
+          enum:
+          - asezare
+          - cetate
+    DrumMap:
+      type: object
+      required:
+      - id
+      - idMuchie
+      - idJucator
+      - jucator
+      - culoare
+      properties:
+        id:
+          type: integer
+        idMuchie:
+          type: integer
+        idJucator:
+          type: integer
+        jucator:
+          type: string
+        culoare:
+          type: string
+          nullable: true
+    SetupAsezareRequest:
+      type: object
+      required:
+      - idVarf
+      properties:
+        idVarf:
+          type: integer
+          minimum: 1
+    SetupDrumRequest:
+      type: object
+      required:
+      - idMuchie
+      properties:
+        idMuchie:
+          type: integer
+          minimum: 1
+    SetupAsezareResponse:
+      type: object
+      required:
+      - mesaj
+      - pasUrmator
+      - resurseStart
+      properties:
+        mesaj:
+          type: string
+        pasUrmator:
+          type: string
+          enum:
+          - drum
+        resurseStart:
+          $ref: '#/components/schemas/ResurseCinci'
+    SimpleMessageResponse:
+      type: object
+      required:
+      - mesaj
+      properties:
+        mesaj:
+          type: string
+    MutariListResponse:
+      type: object
+      required:
+      - items
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mutare'
+        total:
+          type: integer
+    Mutare:
+      type: object
+      required:
+      - id
+      - jucator
+      - tip
+      - mesaj
+      - runda
+      - payload
+      - createdAt
+      properties:
+        id:
+          type: integer
+        jucator:
+          $ref: '#/components/schemas/MutareJucatorRef'
+        tip:
+          type: string
+          enum:
+          - zar
+          - asezare
+          - drum
+          - cetate
+          - paseaza
+          - tribut
+        mesaj:
+          type: string
+        runda:
+          type: integer
+        payload:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    MutareJucatorRef:
+      type: object
+      required:
+      - id
+      - nume
+      properties:
+        id:
+          type: integer
+        nume:
+          type: string
+    RollDiceResponse:
+      type: object
+      required:
+      - zar1
+      - zar2
+      - suma
+      - productie
+      - mesaj
+      properties:
+        zar1:
+          type: integer
+          minimum: 1
+          maximum: 6
+        zar2:
+          type: integer
+          minimum: 1
+          maximum: 6
+        suma:
+          type: integer
+          minimum: 2
+          maximum: 12
+        productie:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ResursePartiale'
+          description: Mapare dupa id-ul jucatorului, exact cum este produsa de implementarea
+            actuala.
+        mesaj:
+          type: string
+    BuildSettlementRequest:
+      type: object
+      required:
+      - idVarf
+      properties:
+        idVarf:
+          type: integer
+          minimum: 1
+    BuildSettlementResponse:
+      type: object
+      required:
+      - mesaj
+      - idAsezare
+      properties:
+        mesaj:
+          type: string
+        idAsezare:
+          type: integer
+    BuildRoadRequest:
+      type: object
+      required:
+      - idMuchie
+      properties:
+        idMuchie:
+          type: integer
+          minimum: 1
+    BuildRoadResponse:
+      type: object
+      required:
+      - mesaj
+      - idDrum
+      properties:
+        mesaj:
+          type: string
+        idDrum:
+          type: integer
+    UpgradeCityRequest:
+      type: object
+      required:
+      - idAsezare
+      properties:
+        idAsezare:
+          type: integer
+          minimum: 1
+    PassTurnResponse:
+      type: object
+      required:
+      - mesaj
+      - jucatorActivId
+      - turaCurenta
+      properties:
+        mesaj:
+          type: string
+        jucatorActivId:
+          type: integer
+        turaCurenta:
+          type: integer
+    ResurseCinci:
+      type: object
+      required:
+      - lemn
+      - piatra
+      - aur
+      - grau
+      - lana
+      properties:
+        lemn:
+          type: integer
+          minimum: 0
+        piatra:
+          type: integer
+          minimum: 0
+        aur:
+          type: integer
+          minimum: 0
+        grau:
+          type: integer
+          minimum: 0
+        lana:
+          type: integer
+          minimum: 0
+    ResursePartiale:
+      type: object
+      properties:
+        lemn:
+          type: integer
+          minimum: 0
+        piatra:
+          type: integer
+          minimum: 0
+        aur:
+          type: integer
+          minimum: 0
+        grau:
+          type: integer
+          minimum: 0
+        lana:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    ErrorResponse:
+      type: object
+      required:
+      - cod
+      - mesaj
+      - status
+      - timestamp
+      properties:
+        cod:
+          type: string
+          example: CERERE_INVALIDA
+        mesaj:
+          type: string
+          example: idPartida invalid.
+        status:
+          type: integer
+          example: 400
+        timestamp:
+          type: string
+          format: date-time
+        detalii:
+          type: array
+          items:
+            type: string
+    PartidaUpdateRequest:
+      type: object
+      properties:
+        nume:
+          type: string
+          minLength: 1
+          maxLength: 80
+          example: Partida actualizata
+        jucatoriMaxim:
+          type: integer
+          minimum: 2
+          maximum: 4
+          example: 4
+        punctajCastig:
+          type: integer
+          minimum: 5
+          maximum: 20
+          example: 10
+      description: Campurile actualizabile ale unei partide aflate in asteptare.
+    JucatorUpdateRequest:
+      type: object
+      properties:
+        nume:
+          type: string
+          minLength: 1
+          maxLength: 40
+          example: Vlad
+        culoare:
+          type: string
+          nullable: true
+          enum:
+          - albastru
+          - rosu
+          - verde
+          - galben
+      description: Campurile actualizabile ale unui jucator inainte de startul partidei.

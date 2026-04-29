@@ -1,0 +1,83 @@
+### Negustorii Cetatii (Catan-like) - Teste manuale
+### Instaleaza extensia "REST Client" in VS Code (rangav.vscode-rest-client)
+
+@host = http://localhost:8080
+@idPartida = 2
+
+### --- 0. Healthcheck ---
+GET {{host}}/api/ping
+
+### --- 1. Lista partide ---
+GET {{host}}/api/partide
+
+### --- 2. Creeaza o partida noua ---
+POST {{host}}/api/partide
+Content-Type: application/json
+
+{ "nume": "Cetatea de test", "jucatoriMaxim": 3, "punctajCastig": 8 }
+
+### --- 3. Adauga jucatori (modifica idPartida-ul de mai sus) ---
+POST {{host}}/api/partide/{{idPartida}}/jucatori
+Content-Type: application/json
+
+{ "nume": "Vlad", "culoare": "albastru" }
+
+###
+POST {{host}}/api/partide/{{idPartida}}/jucatori
+Content-Type: application/json
+
+{ "nume": "Ion", "culoare": "rosu" }
+
+### --- 4. Porneste partida (genereaza harta + intra in faza setup) ---
+POST {{host}}/api/partide/{{idPartida}}/start
+
+### --- 5. Vezi harta (hexagoane, varfuri, muchii) ---
+GET {{host}}/api/partide/{{idPartida}}/harta
+
+### --- 6. Detalii partida (faza, jucator activ, etc.) ---
+GET {{host}}/api/partide/{{idPartida}}
+
+### --- SETUP (asezare initiala): trebuie un idVarf valid din harta ---
+POST {{host}}/api/partide/{{idPartida}}/setup/asezare
+Content-Type: application/json
+
+{ "idVarf": 1 }
+
+### Drumul initial - idMuchie adiacent asezarii
+POST {{host}}/api/partide/{{idPartida}}/setup/drum
+Content-Type: application/json
+
+{ "idMuchie": 1 }
+
+### --- JOC NORMAL ---
+
+### 7. Arunca zarul
+POST {{host}}/api/partide/{{idPartida}}/mutari/zar
+
+### 8. Construieste asezare (pe un varf liber, cu drum propriu adiacent)
+POST {{host}}/api/partide/{{idPartida}}/mutari/asezare
+Content-Type: application/json
+
+{ "idVarf": 5 }
+
+### 9. Construieste drum
+POST {{host}}/api/partide/{{idPartida}}/mutari/drum
+Content-Type: application/json
+
+{ "idMuchie": 3 }
+
+### 10. Upgrade asezare in cetate
+POST {{host}}/api/partide/{{idPartida}}/mutari/cetate
+Content-Type: application/json
+
+{ "idAsezare": 1 }
+
+### 11. Paseaza tura
+POST {{host}}/api/partide/{{idPartida}}/mutari/paseaza
+
+### 12. Istoricul mutarilor
+GET {{host}}/api/partide/{{idPartida}}/mutari
+
+### --- Erori demo ---
+GET {{host}}/api/partide/9999
+GET {{host}}/api/partide/abc
