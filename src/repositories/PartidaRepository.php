@@ -6,37 +6,19 @@ namespace App\Repositories;
 use PDO;
 
 /**
- * PartidaRepository
- *
- * Acces la date pentru tabela `partide`.
- *
- * O partida are mai multe stari:
- *   - status: in_asteptare | activa | finalizata | arhivata (status "public")
- *   - faza:   in_asteptare | asezare_initiala | joc | finalizata (logica interna)
- *   - jucator_activ_id: cine e la mutare
- *   - tura_curenta: numarul rundei curente in faza de joc
- *   - runda_setup, pas_setup: pentru a sti unde suntem in faza de asezare initiala
+ * PartidaRepository - acces la date pentru tabela `partide`.
  */
 final class PartidaRepository
 {
-    public function __construct(private readonly PDO $pdo)
-    {
-    }
+    public function __construct(private readonly PDO $pdo) {}
 
-    /**
-     * Lista de partide cu numarul de jucatori inscrisi.
-     *
-     * @return array{items: array<int, array<string, mixed>>, total: int}
-     */
     public function findAll(?string $status, int $pagina, int $dimensiunePagina): array
     {
         $offset = ($pagina - 1) * $dimensiunePagina;
 
         $sqlCount = "SELECT COUNT(*) FROM partide" . ($status !== null ? " WHERE status = :status" : "");
         $stmtCount = $this->pdo->prepare($sqlCount);
-        if ($status !== null) {
-            $stmtCount->bindValue(':status', $status, PDO::PARAM_STR);
-        }
+        if ($status !== null) $stmtCount->bindValue(':status', $status, PDO::PARAM_STR);
         $stmtCount->execute();
         $total = (int) $stmtCount->fetchColumn();
 
@@ -50,11 +32,8 @@ final class PartidaRepository
             ORDER BY p.id DESC
             LIMIT :limit OFFSET :offset
         ";
-
         $stmt = $this->pdo->prepare($sql);
-        if ($status !== null) {
-            $stmt->bindValue(':status', $status, PDO::PARAM_STR);
-        }
+        if ($status !== null) $stmt->bindValue(':status', $status, PDO::PARAM_STR);
         $stmt->bindValue(':limit',  $dimensiunePagina, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset,           PDO::PARAM_INT);
         $stmt->execute();
@@ -84,7 +63,6 @@ final class PartidaRepository
     {
         $sql = "INSERT INTO partide (nume, status, faza, jucatori_maxim, punctaj_castig)
                 VALUES (:nume, 'in_asteptare', 'in_asteptare', :jmax, :pcastig)";
-
         $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':nume',    $nume,          PDO::PARAM_STR);
         $stmt->bindValue(':jmax',    $jucatoriMaxim, PDO::PARAM_INT);
@@ -93,10 +71,6 @@ final class PartidaRepository
         return (int) $this->pdo->lastInsertId();
     }
 
-    /**
-     * Trecere de la 'in_asteptare' la 'asezare_initiala': harta e generata,
-     * primul jucator (ordine=1) e activ, asteptam asezarea initiala.
-     */
     public function pornesteSetup(int $idPartida, int $idPrimulJucator): void
     {
         $sql = "UPDATE partide
@@ -104,16 +78,12 @@ final class PartidaRepository
                     runda_setup = 1, pas_setup = 'asezare',
                     jucator_activ_id = :j
                 WHERE id = :id";
-
         $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':j',  $idPrimulJucator, PDO::PARAM_INT);
         $stmt->bindValue(':id', $idPartida,       PDO::PARAM_INT);
         $stmt->execute();
     }
 
-    /**
-     * Schimba pasul de setup intre 'asezare' si 'drum'.
-     */
     public function setPasSetup(int $idPartida, string $pas): void
     {
         $stmt = $this->pdo->prepare("UPDATE partide SET pas_setup = :p WHERE id = :id");
@@ -122,10 +92,6 @@ final class PartidaRepository
         $stmt->execute();
     }
 
-    /**
-     * Avanseaza setup-ul: trece la urmatorul jucator (snake draft) sau
-     * la faza 'joc' cand toata lumea a terminat.
-     */
     public function actualizeazaSetup(int $idPartida, int $idJucatorUrmator, int $rundaSetup, string $pasSetup, ?string $faza = null): void
     {
         $faza ??= 'asezare_initiala';
@@ -141,10 +107,6 @@ final class PartidaRepository
         $stmt->execute();
     }
 
-    /**
-     * Setup s-a terminat - intram in faza de joc normala. Setam tura 1 si
-     * primul jucator (ordine=1) ca jucator activ.
-     */
     public function intraInJoc(int $idPartida, int $idPrimulJucator): void
     {
         $sql = "UPDATE partide
@@ -159,9 +121,7 @@ final class PartidaRepository
 
     public function avanseazaTura(int $idPartida, int $idJucatorUrmator, int $turaNoua): void
     {
-        $sql = "UPDATE partide
-                SET jucator_activ_id = :j, tura_curenta = :t
-                WHERE id = :id";
+        $sql = "UPDATE partide SET jucator_activ_id = :j, tura_curenta = :t WHERE id = :id";
         $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':j',  $idJucatorUrmator, PDO::PARAM_INT);
         $stmt->bindValue(':t',  $turaNoua,         PDO::PARAM_INT);
@@ -171,12 +131,35 @@ final class PartidaRepository
 
     public function finalizeaza(int $idPartida, int $idCastigator): void
     {
-        $sql = "UPDATE partide
-                SET status = 'finalizata', faza = 'finalizata', castigator_id = :c
-                WHERE id = :id";
+        $sql = "UPDATE partide SET status = 'finalizata', faza = 'finalizata', castigator_id = :c WHERE id = :id";
         $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':c',  $idCastigator, PDO::PARAM_INT);
         $stmt->bindValue(':id', $idPartida,    PDO::PARAM_INT);
+        $stmt->execute();
+    }
+
+    public function actualizeazaMetadata(int $idPartida, string $nume, int $jucatoriMaxim, int $punctajCastig): void
+    {
+        $sql = "UPDATE partide SET nume = :n, jucatori_maxim = :jm, punctaj_castig = :pc WHERE id = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->bindValue(':n',  $nume,           PDO::PARAM_STR);
+        $stmt->bindValue(':jm', $jucatoriMaxim,  PDO::PARAM_INT);
+        $stmt->bindValue(':pc', $punctajCastig,  PDO::PARAM_INT);
+        $stmt->bindValue(':id', $idPartida,      PDO::PARAM_INT);
+        $stmt->execute();
+    }
+
+    public function delete(int $idPartida): void
+    {
+        $stmt = $this->pdo->prepare("DELETE FROM partide WHERE id = :id");
+        $stmt->bindValue(':id', $idPartida, PDO::PARAM_INT);
+        $stmt->execute();
+    }
+
+    public function arhiveaza(int $idPartida): void
+    {
+        $stmt = $this->pdo->prepare("UPDATE partide SET status = 'arhivata' WHERE id = :id");
+        $stmt->bindValue(':id', $idPartida, PDO::PARAM_INT);
         $stmt->execute();
     }
 }

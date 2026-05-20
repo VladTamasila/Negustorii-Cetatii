@@ -6,25 +6,15 @@ namespace App\Repositories;
 use PDO;
 
 /**
- * JucatorRepository
- *
- * Acces la tabela `jucatori`. Acum cu 5 resurse (lemn, piatra, aur, grau, lana)
- * si o coloana `ordine` pentru pozitia jucatorului in setup (1, 2, 3, 4).
+ * JucatorRepository - acces la tabela `jucatori`.
  */
 final class JucatorRepository
 {
-    public function __construct(private readonly PDO $pdo)
-    {
-    }
+    public function __construct(private readonly PDO $pdo) {}
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
     public function findByPartida(int $idPartida): array
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT * FROM jucatori WHERE partida_id = :id ORDER BY ordine ASC, id ASC"
-        );
+        $stmt = $this->pdo->prepare("SELECT * FROM jucatori WHERE partida_id = :id ORDER BY ordine ASC, id ASC");
         $stmt->bindValue(':id', $idPartida, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -39,23 +29,14 @@ final class JucatorRepository
         return $row === false ? null : $row;
     }
 
-    /**
-     * Creeaza un jucator. `ordine` se calculeaza automat - urmatorul disponibil
-     * in partida.
-     */
     public function create(int $idPartida, string $nume, ?string $culoare): int
     {
-        // Aflam urmatoarea ordine disponibila
-        $stmt = $this->pdo->prepare(
-            "SELECT COALESCE(MAX(ordine), 0) + 1 AS proxima
-             FROM jucatori WHERE partida_id = :p"
-        );
+        $stmt = $this->pdo->prepare("SELECT COALESCE(MAX(ordine), 0) + 1 AS proxima FROM jucatori WHERE partida_id = :p");
         $stmt->bindValue(':p', $idPartida, PDO::PARAM_INT);
         $stmt->execute();
         $ordine = (int) $stmt->fetchColumn();
 
-        $sql = "INSERT INTO jucatori (partida_id, nume, culoare, ordine)
-                VALUES (:p, :n, :c, :o)";
+        $sql = "INSERT INTO jucatori (partida_id, nume, culoare, ordine) VALUES (:p, :n, :c, :o)";
         $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':p', $idPartida, PDO::PARAM_INT);
         $stmt->bindValue(':n', $nume,      PDO::PARAM_STR);
@@ -65,11 +46,6 @@ final class JucatorRepository
         return (int) $this->pdo->lastInsertId();
     }
 
-    /**
-     * Modifica resursele si prestigiul unui jucator (valori absolute, nu deltas).
-     *
-     * @param array{lemn:int, piatra:int, aur:int, grau:int, lana:int, prestigiu:int} $r
-     */
     public function setResurse(int $idJucator, array $r): void
     {
         $sql = "UPDATE jucatori
@@ -95,21 +71,59 @@ final class JucatorRepository
         return (int) $stmt->fetchColumn();
     }
 
-    /**
-     * Verifica daca o culoare este deja folosita de un jucator in partida.
-     * Folosit ca regula de unicitate la adaugarea unui jucator nou.
-     * NULL nu e considerat duplicat (jucatorii fara culoare nu se ciocnesc).
-     */
     public function existaCuloareInPartida(int $idPartida, string $culoare): bool
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT 1 FROM jucatori
-             WHERE partida_id = :p AND culoare = :c
-             LIMIT 1"
-        );
+        $stmt = $this->pdo->prepare("SELECT 1 FROM jucatori WHERE partida_id = :p AND culoare = :c LIMIT 1");
         $stmt->bindValue(':p', $idPartida, PDO::PARAM_INT);
         $stmt->bindValue(':c', $culoare,   PDO::PARAM_STR);
         $stmt->execute();
         return $stmt->fetchColumn() !== false;
+    }
+
+    public function existaCuloareInPartidaExceptand(int $idPartida, string $culoare, int $idIgnorat): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT 1 FROM jucatori WHERE partida_id = :p AND culoare = :c AND id <> :iid LIMIT 1");
+        $stmt->bindValue(':p',   $idPartida, PDO::PARAM_INT);
+        $stmt->bindValue(':c',   $culoare,   PDO::PARAM_STR);
+        $stmt->bindValue(':iid', $idIgnorat, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchColumn() !== false;
+    }
+
+    public function actualizeazaProfil(int $idJucator, string $nume, ?string $culoare): void
+    {
+        $sql = "UPDATE jucatori SET nume = :n, culoare = :c WHERE id = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->bindValue(':n',  $nume,      PDO::PARAM_STR);
+        $stmt->bindValue(':c',  $culoare,   $culoare === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $stmt->bindValue(':id', $idJucator, PDO::PARAM_INT);
+        $stmt->execute();
+    }
+
+    public function delete(int $idJucator): void
+    {
+        $stmt = $this->pdo->prepare("SELECT partida_id FROM jucatori WHERE id = :id");
+        $stmt->bindValue(':id', $idJucator, PDO::PARAM_INT);
+        $stmt->execute();
+        $idPartida = (int) $stmt->fetchColumn();
+
+        $stmt = $this->pdo->prepare("DELETE FROM jucatori WHERE id = :id");
+        $stmt->bindValue(':id', $idJucator, PDO::PARAM_INT);
+        $stmt->execute();
+
+        if ($idPartida > 0) $this->reindexeazaOrdinea($idPartida);
+    }
+
+    private function reindexeazaOrdinea(int $idPartida): void
+    {
+        $rows = $this->findByPartida($idPartida);
+        $i = 1;
+        foreach ($rows as $j) {
+            $stmt = $this->pdo->prepare("UPDATE jucatori SET ordine = :o WHERE id = :id");
+            $stmt->bindValue(':o',  $i,            PDO::PARAM_INT);
+            $stmt->bindValue(':id', (int)$j['id'], PDO::PARAM_INT);
+            $stmt->execute();
+            $i++;
+        }
     }
 }

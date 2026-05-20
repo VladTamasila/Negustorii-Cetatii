@@ -1,0 +1,341 @@
+{
+  "info": {
+    "_postman_id": "f8a3b1c2-1234-5678-abcd-1234567890ab",
+    "name": "Negustorii Cetatii - Scenariu Complet",
+    "description": "Scenariu de testare end-to-end pentru Negustorii Cetatii (Sprint #3).\n\n**Transfer automat de proprietati** intre pasi prin variabile de mediu (`pm.collectionVariables.set(...)`).\n\nFiecare pas extrage ID-uri din raspuns si le foloseste in pasii urmatori - exact ce cere profesorul.\n\n## Cum se ruleaza\n\n1. Porneste serverul: `php -S localhost:8080 -t public`\n2. In Postman: deschide aceasta colectie -> click pe \"Run\" (Runner)\n3. Apasa \"Run Negustorii Cetatii\" -> vezi rezultatele\n\nVariabilele propagate automat: `idPartida`, `idJucator1`, `idJucator2`, `idVarf1`, `idMuchie1`, `idMutare`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Ping (verificare server)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/ping"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('ok === true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. POST partida (creeaza + transfer idPartida)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nume\": \"Postman Scenariu\",\n  \"jucatoriMaxim\": 4,\n  \"punctajCastig\": 10\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const r = pm.response.json();",
+              "// === TRANSFER AUTOMAT DE PROPRIETATI ===",
+              "pm.collectionVariables.set('idPartida', r.id);",
+              "console.log('idPartida transferat:', r.id);",
+              "pm.test('Faza = in_asteptare', () => pm.expect(r.faza).to.eql('in_asteptare'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. PUT partida (actualizeaza)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nume\": \"Postman Scenariu (modificat)\",\n  \"punctajCastig\": 12\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('Nume actualizat', () => pm.expect(r.nume).to.include('modificat'));",
+              "pm.test('Punctaj actualizat', () => pm.expect(r.punctajCastig).to.eql(12));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. POST jucator #1 (transfer idJucator1)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/jucatori",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nume\": \"Vlad\",\n  \"culoare\": \"albastru\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('idJucator1', r.id);",
+              "console.log('idJucator1 transferat:', r.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. POST jucator #2 (transfer idJucator2)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/jucatori",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nume\": \"Bianca\",\n  \"culoare\": \"rosu\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('idJucator2', r.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. PUT jucator (schimba culoarea)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/jucatori/{{idJucator1}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nume\": \"Vlad\",\n  \"culoare\": \"verde\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Culoare = verde', () => pm.expect(pm.response.json().culoare).to.eql('verde'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. GET jucator (verificare detalii)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/jucatori/{{idJucator1}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('Are toate resursele', () => pm.expect(r).to.include.keys(['lemn','piatra','aur','grau','lana']));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. POST start (genereaza harta)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/start"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('Faza = asezare_initiala', () => pm.expect(r.faza).to.eql('asezare_initiala'));",
+              "pm.test('Jucator activ = idJucator1', () => pm.expect(r.jucatorActivId).to.eql(parseInt(pm.collectionVariables.get('idJucator1'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. GET harta (transfer idVarf1 + idMuchie1)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/harta"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('19 hexagoane', () => pm.expect(r.hexagoane.length).to.eql(19));",
+              "pm.test('54 varfuri', () => pm.expect(r.varfuri.length).to.eql(54));",
+              "// === TRANSFER: alegem un varf si o muchie pentru setup ===",
+              "pm.collectionVariables.set('idVarf1', r.varfuri[0].id);",
+              "// muchie adiacenta varfului ales",
+              "const m = r.muchii.find(mm => mm.varfAId === r.varfuri[0].id || mm.varfBId === r.varfuri[0].id);",
+              "pm.collectionVariables.set('idMuchie1', m.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. POST setup/asezare (foloseste idVarf1)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/setup/asezare",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idVarf\": {{idVarf1}}\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "pm.test('Pas urmator = drum', () => pm.expect(pm.response.json().pasUrmator).to.eql('drum'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. POST setup/drum (foloseste idMuchie1)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/setup/drum",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idMuchie\": {{idMuchie1}}\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. GET mutari (transfer idMutare)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/mutari"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.test('Avem cel putin 2 mutari', () => pm.expect(r.items.length).to.be.at.least(2));",
+              "pm.collectionVariables.set('idMutare', r.items[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. GET mutari/{id} (foloseste idMutare)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}/mutari/{{idMutare}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('ID corespunde', () => pm.expect(pm.response.json().id).to.eql(parseInt(pm.collectionVariables.get('idMutare'))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. GET /api/partide (paginare + filtru)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/partide?status=activa&dimensiunePagina=5"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Are items', () => pm.expect(pm.response.json()).to.have.property('items'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. DELETE partida (cleanup)",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/partide/{{idPartida}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 sau 204', () => pm.expect([200, 204]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

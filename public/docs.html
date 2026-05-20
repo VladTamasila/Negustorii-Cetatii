@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>API Negustorii Cetatii - Documentatie Swagger</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css">
+    <style>
+        body { margin: 0; background: #1a1a1a; }
+        /* topbar Swagger e foarte intens vizual; o ascundem ca sa avem un look curat */
+        .topbar { display: none !important; }
+        /* tema dark light - schimbam doar fundalul si textul de baza */
+        .swagger-ui, .swagger-ui .info, .swagger-ui .scheme-container { background: #fff; }
+    </style>
+</head>
+<body>
+<div id="swagger-ui"></div>
+
+<script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-standalone-preset.js"></script>
+<script>
+    // Swagger UI consuma spec-ul de la /openapi (vezi src/routes.php).
+    // URL-ul nu se termina in ".yaml" pentru ca PHP CLI server raspunde direct
+    // 404 pe extensii cunoscute care nu corespund unui fisier real - fara sa
+    // mai treaca prin index.php.
+    window.ui = SwaggerUIBundle({
+        url: '/openapi',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIStandalonePreset
+        ],
+        plugins: [
+            SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: 'BaseLayout',
+        // Permite executarea "Try it out" pe toate operatiile, inclusiv POST/PUT/DELETE
+        tryItOutEnabled: true,
+        // Sortam operatiile alfabetic in cadrul fiecarui tag - mai usor de gasit
+        operationsSorter: 'alpha',
+    });
+</script>
+</body>
+</html>

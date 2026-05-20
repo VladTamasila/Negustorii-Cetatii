@@ -1,0 +1,252 @@
+==================================================================
+  NEGUSTORII CETATII - MOD ADMIN (testare via F12 Console)
+==================================================================
+
+Acest fisier contine snippet-uri JavaScript pe care le copiezi direct
+in consola dev tools a browser-ului (F12 → Console) ca sa demonstrezi
+toate operatiile REST cerute: GET, POST, PUT, DELETE.
+
+CUM SE FOLOSESTE:
+  1. Porneste serverul:  php -S localhost:8080 -t public
+  2. Deschide:           http://localhost:8080/
+  3. Apasa F12 → Console
+  4. Copy-paste snippet-urile de mai jos, unul cate unul, si apasa Enter
+  5. Vezi raspunsul JSON in Console + Network tab
+
+OBSERVATII:
+  - Snippet-urile folosesc fetch() nativ - acelasi browser, "developer
+    mode".
+  - Variabilele cu `let` raman in scope pe pagina, deci poti reutiliza
+    `idPartida` intre snippet-uri (transfer de proprietati).
+  - Pentru Network tab: bifeaza "Preserve log" ca sa vezi toate
+    request-urile chiar daca se schimba pagina.
+
+==================================================================
+  0. HELPER FUNCTION 
+==================================================================
+
+// Wrapper peste fetch() care logheaza si parseaza JSON automat.
+// Returneaza obiectul {status, data}. Aruncare la eroare 5xx, OK la 4xx.
+async function call(metoda, ruta, body) {
+  const opt = { method: metoda, headers: {} };
+  if (body !== undefined) {
+    opt.headers['Content-Type'] = 'application/json';
+    opt.body = JSON.stringify(body);
+  }
+  const r = await fetch('/api' + ruta, opt);
+  const text = await r.text();
+  const data = text ? JSON.parse(text) : null;
+  console.log(`${metoda} ${ruta} → ${r.status}`, data);
+  return { status: r.status, data };
+}
+
+
+==================================================================
+  1. GET - operatii de citire (READ)
+==================================================================
+
+// 1.1 Healthcheck (verifica daca serverul e UP)
+await call('GET', '/ping');
+
+// 1.2 Lista toate partidele
+await call('GET', '/partide');
+
+// 1.3 Lista cu filtre (status + paginare)
+await call('GET', '/partide?status=activa&pagina=1&dimensiunePagina=5');
+
+// 1.4 Detalii partida individuala (dupa creare, schimba ID-ul)
+await call('GET', '/partide/1');
+
+// 1.5 Lista jucatori intr-o partida
+await call('GET', '/partide/1/jucatori');
+
+// 1.6 Detalii jucator individual
+await call('GET', '/partide/1/jucatori/1');
+
+// 1.7 Harta unei partide (hexagoane, varfuri, muchii, constructii)
+await call('GET', '/partide/1/harta');
+
+// 1.8 Istoricul mutarilor
+await call('GET', '/partide/1/mutari');
+
+// 1.9 Detalii pentru o singura mutare
+await call('GET', '/partide/1/mutari/1');
+
+
+==================================================================
+  2. POST - operatii de creare (CREATE)
+==================================================================
+
+// 2.1 Creeaza o partida noua si salveaza ID-ul intr-o variabila
+let r1 = await call('POST', '/partide', {
+  nume: 'Demo Admin',
+  jucatoriMaxim: 4,
+  punctajCastig: 10
+});
+let idPartida = r1.data.id;   // <-- TRANSFER AUTOMAT DE PROPRIETATI
+console.log('idPartida =', idPartida);
+
+// 2.2 Adauga jucator #1
+let r2 = await call('POST', `/partide/${idPartida}/jucatori`, {
+  nume: 'Vlad',
+  culoare: 'albastru'
+});
+let idJucator1 = r2.data.id;
+console.log('idJucator1 =', idJucator1);
+
+// 2.3 Adauga jucator #2
+let r3 = await call('POST', `/partide/${idPartida}/jucatori`, {
+  nume: 'Bianca',
+  culoare: 'rosu'
+});
+let idJucator2 = r3.data.id;
+
+// 2.4 Porneste partida (genereaza harta + intra in faza setup)
+await call('POST', `/partide/${idPartida}/start`);
+
+// 2.5 (in faza setup) Plaseaza prima asezare
+// Mai intai obtinem un varf liber din harta:
+let harta = (await call('GET', `/partide/${idPartida}/harta`)).data;
+let idVarf = harta.varfuri[0].id;
+await call('POST', `/partide/${idPartida}/setup/asezare`, { idVarf });
+
+// 2.6 Plaseaza primul drum (muchie adiacenta varfului)
+let idMuchie = harta.muchii.find(m => m.varfAId === idVarf || m.varfBId === idVarf).id;
+await call('POST', `/partide/${idPartida}/setup/drum`, { idMuchie });
+
+
+==================================================================
+  3. PUT - operatii de actualizare (UPDATE)
+==================================================================
+
+// 3.1 Actualizare partida (redenumire)
+// NOTA: doar in faza in_asteptare. Daca partida e pornita, primesti 409.
+let rPut = await call('PUT', `/partide/${idPartida}`, {
+  nume: 'Demo Admin (modificat)',
+  punctajCastig: 15
+});
+
+// 3.2 Actualizare jucator (schimba culoarea)
+await call('PUT', `/partide/${idPartida}/jucatori/${idJucator1}`, {
+  nume: 'Vlad',
+  culoare: 'verde'
+});
+
+// 3.3 Verifica ca s-au aplicat modificarile
+await call('GET', `/partide/${idPartida}/jucatori/${idJucator1}`);
+// → ar trebui sa vezi culoare: "verde"
+
+
+==================================================================
+  4. DELETE - operatii de stergere (DELETE)
+==================================================================
+
+// 4.1 Sterge un jucator din lobby (doar in faza in_asteptare)
+// Daca partida e pornita, primesti 409 CONFLICT_STARE.
+await call('DELETE', `/partide/${idPartida}/jucatori/${idJucator2}`);
+// → status 204 No Content (nu returneaza body)
+
+// 4.2 Sterge partida
+// - In lobby: hard delete, status 204
+// - Pornita: arhivare, status 200 cu mesaj
+await call('DELETE', `/partide/${idPartida}`);
+
+// 4.3 Daca era pornita si s-a arhivat, mai apesi o data ca sa o stergi
+// fizic din DB:
+await call('DELETE', `/partide/${idPartida}`);
+// → status 204
+
+
+==================================================================
+  5. EROARE CONTROLATA (demonstreaza ca API-ul valideaza)
+==================================================================
+
+// 5.1 Cerere invalida - nume gol
+await call('POST', '/partide', { nume: '' });
+// → 400 CERERE_INVALIDA
+
+// 5.2 Partida inexistenta
+await call('GET', '/partide/99999');
+// → 404 PARTIDA_INEXISTENTA
+
+// 5.3 Duplicat culoare (doi jucatori cu aceeasi culoare in partida)
+let testPartida = (await call('POST', '/partide', { nume: 'Test culoare' })).data;
+await call('POST', `/partide/${testPartida.id}/jucatori`, { nume: 'A', culoare: 'albastru' });
+await call('POST', `/partide/${testPartida.id}/jucatori`, { nume: 'B', culoare: 'albastru' });
+// → 409 CULOARE_DEJA_FOLOSITA
+await call('DELETE', `/partide/${testPartida.id}`);  // cleanup
+
+// 5.4 PUT pe o partida care nu mai e in lobby
+// (asuma idPartida pornit, demonstreaza ca regula de stare e respectata)
+// → 409 CONFLICT_STARE
+
+
+==================================================================
+  6. SCENARIU COMPLET (creare → actualizare → joc → stergere)
+==================================================================
+// Acesta e exact ce ruleaza tests/scenariu.php, dar din browser.
+// Demonstreaza "transfer automat de proprietati intre pasi" cerut.
+
+(async () => {
+  console.log('=== SCENARIU ADMIN ===');
+
+  // Pas 1: creare partida
+  let p = (await call('POST', '/partide', { nume: 'Scenariu F12', jucatoriMaxim: 3 })).data;
+  let id = p.id;
+  console.log('Partida creata:', id);
+
+  // Pas 2: PUT (redenumire)
+  await call('PUT', `/partide/${id}`, { nume: 'Scenariu F12 (PUT)' });
+
+  // Pas 3: doi jucatori
+  let j1 = (await call('POST', `/partide/${id}/jucatori`, { nume: 'Alpha', culoare: 'albastru' })).data;
+  let j2 = (await call('POST', `/partide/${id}/jucatori`, { nume: 'Beta',  culoare: 'rosu' })).data;
+  console.log('Jucatori:', j1.id, j2.id);
+
+  // Pas 4: PUT jucator (schimba culoare)
+  await call('PUT', `/partide/${id}/jucatori/${j1.id}`, { nume: 'Alpha', culoare: 'verde' });
+
+  // Pas 5: start
+  await call('POST', `/partide/${id}/start`);
+
+  // Pas 6: GET harta + setup
+  let h = (await call('GET', `/partide/${id}/harta`)).data;
+  let v0 = h.varfuri[0].id;
+  let m0 = h.muchii.find(m => m.varfAId === v0 || m.varfBId === v0).id;
+  await call('POST', `/partide/${id}/setup/asezare`, { idVarf: v0 });
+  await call('POST', `/partide/${id}/setup/drum`,    { idMuchie: m0 });
+
+  // Pas 7: GET istoric
+  let mutari = (await call('GET', `/partide/${id}/mutari`)).data;
+  console.log('Mutari inregistrate:', mutari.items.length);
+
+  // Pas 8: cleanup - DELETE arhiveaza (pornita) + DELETE fizic
+  await call('DELETE', `/partide/${id}`);
+  await call('DELETE', `/partide/${id}`);
+  console.log('=== END SCENARIU ===');
+})();
+
+
+==================================================================
+  7. NETWORK TAB 
+==================================================================
+
+  1. F12 → Network → bifeaza "Preserve log"
+  2. Click "Filter by request name" → scrie "api/"
+  3. Click pe orice request din lista:
+       - Headers   = vezi Method, URL, Request Headers
+       - Payload   = body-ul JSON trimis (POST/PUT)
+       - Response  = JSON-ul intors de server
+       - Timing    = cat a durat
+  4. Toate cele 4 verbe HTTP (GET/POST/PUT/DELETE) 
+
+
+==================================================================
+  8. PUNCTE DE INTERES ADITIONALE
+==================================================================
+
+  /docs      → Swagger UI interactiv (pentru testare cu "Try it out")
+  /openapi   → fisierul OpenAPI raw (YAML)
+  /api/ping  → healthcheck rapid
+
+==================================================================

@@ -1,14 +1,21 @@
 openapi: 3.0.3
 info:
   title: API Negustorii Cetatii
-  version: 2.4.0
-  description: 'Documentatie OpenAPI aliniata cu implementarea PHP/Slim din Sprint
-    #2.
+  version: 3.0.0
+  description: |
+    API REST pentru jocul Catan-like peaceful "Negustorii Cetatii" - Sprint #3.
 
+    Toate operatiile listate sunt **implementate efectiv** in codul PHP/Slim.
+    Endpoint-urile acopera 4 categorii principale de resurse:
+      - **Partide** (GET / POST / PUT / DELETE)
+      - **Jucatori** (GET / POST / PUT / DELETE pe lista + individual)
+      - **Harta** (GET hexagoane, varfuri, muchii, asezari, drumuri)
+      - **Mutari** (GET istoric + detalii; POST zar/asezare/drum/cetate/paseaza)
+      - **Setup** (POST asezare initiala + drum initial, snake draft)
 
-    Aceasta versiune pastreaza endpoint-urile implementate efectiv si adauga si endpoint-urile
-    planificate pentru PUT/DELETE, marcate explicit cu `x-implemented: false`, ca
-    sa fie clar ce exista deja in cod si ce urmeaza sa fie implementat.'
+    Pentru testare se pot folosi: SwaggerUI (la `/docs`), Postman
+    (collection in `docs/postman_collection.json`), Guzzle PHP
+    (script in `tests/scenariu.php`) sau orice client HTTP standard.
 servers:
 - url: http://localhost:8080
   description: Rulare locala cu `php -S localhost:8080 -t public`
@@ -19,19 +26,6 @@ tags:
 - name: Harta
 - name: Setup
 - name: Mutari
-x-roadmap:
-  planned_endpoints:
-  - PUT /api/partide/{idPartida}
-  - DELETE /api/partide/{idPartida}
-  - PUT /api/partide/{idPartida}/jucatori/{idJucator}
-  - DELETE /api/partide/{idPartida}/jucatori/{idJucator}
-  - GET /api/partide/{idPartida}/jucatori/{idJucator}
-  - GET /api/partide/{idPartida}/mutari/{idMutare}
-  - GET /api/cladiri/catalog
-  - tranzactionare/piata centrala
-  note: 'Endpoint-urile marcate cu x-implemented: false sunt documentate acum pentru
-    completitudinea specificatiei, dar necesita metode noi in controllers/repositories
-    pentru a deveni functionale.'
 paths:
   /api/ping:
     get:
@@ -129,11 +123,12 @@ paths:
     put:
       tags:
       - Partide
-      summary: Actualizeaza o partida
-      description: 'Endpoint planificat pentru Sprint #2 / #3. Permite actualizarea
-        unei partide doar cat timp aceasta este in starea `in_asteptare`.'
+      summary: Actualizeaza metadata unei partide
+      description: |
+        Permite actualizarea numelui, numarului maxim de jucatori si
+        punctajului de castig **doar cat timp partida este in faza
+        `in_asteptare`**. In orice alta faza, raspunsul este 409.
       operationId: actualizeazaPartida
-      x-implemented: false
       parameters:
       - $ref: '#/components/parameters/idPartida'
       requestBody:
@@ -158,22 +153,29 @@ paths:
     delete:
       tags:
       - Partide
-      summary: Sterge o partida
-      description: Endpoint planificat. Pentru varianta simpla, stergerea este permisa
-        doar inainte de startul partidei.
+      summary: Sterge sau arhiveaza o partida
+      description: |
+        - Daca partida este in faza `in_asteptare`, este **stearsa** efectiv
+          (CASCADE pe jucatori/harta/mutari) si raspunsul este `204 No Content`.
+        - Daca partida este deja pornita (asezare_initiala / joc / finalizata),
+          este **arhivata** (status `arhivata`) ca sa pastram istoricul, iar
+          raspunsul este `200` cu un mesaj explicativ.
       operationId: stergePartida
-      x-implemented: false
       parameters:
       - $ref: '#/components/parameters/idPartida'
       responses:
+        '200':
+          description: Partida a fost arhivata (era deja pornita).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
         '204':
-          description: Partida a fost stearsa.
+          description: Partida a fost stearsa efectiv.
         '400':
           $ref: '#/components/responses/CerereInvalida'
         '404':
           $ref: '#/components/responses/PartidaInexistenta'
-        '409':
-          $ref: '#/components/responses/ConflictAplicatie'
   /api/partide/{idPartida}/start:
     post:
       tags:
@@ -252,14 +254,35 @@ paths:
         '409':
           $ref: '#/components/responses/ConflictAplicatie'
   /api/partide/{idPartida}/jucatori/{idJucator}:
+    get:
+      tags:
+      - Jucatori
+      summary: Detalii pentru un jucator
+      description: Returneaza resursele, prestigiul si culoarea jucatorului.
+      operationId: detaliiJucator
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      - $ref: '#/components/parameters/idJucator'
+      responses:
+        '200':
+          description: Detaliile jucatorului.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Jucator'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/JucatorInexistent'
     put:
       tags:
       - Jucatori
       summary: Actualizeaza un jucator din partida
-      description: Endpoint planificat. Poate fi folosit in lobby pentru schimbarea
-        numelui sau culorii, inainte de startul partidei.
+      description: |
+        Permite schimbarea numelui si/sau culorii unui jucator. Disponibil
+        doar in lobby (`faza = in_asteptare`). In orice alta faza raspunsul
+        este 409 (`CONFLICT_STARE`).
       operationId: actualizeazaJucator
-      x-implemented: false
       parameters:
       - $ref: '#/components/parameters/idPartida'
       - $ref: '#/components/parameters/idJucator'
@@ -286,10 +309,11 @@ paths:
       tags:
       - Jucatori
       summary: Elimina un jucator din partida
-      description: 'Endpoint planificat. Pentru Sprint #2, varianta cea mai simpla
-        este sa permita iesirea din lobby doar inainte de start.'
+      description: |
+        Sterge un jucator din lobby. Disponibil doar in faza `in_asteptare`.
+        Dupa stergere, coloana `ordine` este recompactata pentru jucatorii
+        ramasi (1, 2, 3, ...).
       operationId: eliminaJucator
-      x-implemented: false
       parameters:
       - $ref: '#/components/parameters/idPartida'
       - $ref: '#/components/parameters/idJucator'
@@ -391,6 +415,37 @@ paths:
           $ref: '#/components/responses/CerereInvalida'
         '404':
           $ref: '#/components/responses/PartidaInexistenta'
+  /api/partide/{idPartida}/mutari/{idMutare}:
+    get:
+      tags:
+      - Mutari
+      summary: Detalii pentru o mutare specifica
+      description: Util pentru scenarii de testare (verificare ca o mutare anume a fost inregistrata).
+      operationId: detaliiMutare
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      - name: idMutare
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Identificatorul mutarii.
+      responses:
+        '200':
+          description: Detaliile mutarii.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mutare'
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          description: Mutarea nu apartine acestei partide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/partide/{idPartida}/mutari/zar:
     post:
       tags:
