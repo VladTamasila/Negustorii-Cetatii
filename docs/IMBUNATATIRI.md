@@ -1,4 +1,4 @@
-# Imbunatatiri (Final Sprint) - ghid pentru prezentare
+# Imbunatatiri (Sprint #4) - ghid pentru prezentare
 
 Acest document rezuma ce s-a adaugat fata de Sprint #3 si cum se mapeaza fiecare
 lucru pe baremul de notare. Pentru fiecare functie ai: ce e, cum o testezi si
