@@ -1,4 +1,4 @@
-# Negustorii Cetatii - Sprint #3 (Catan-like)
+# Negustorii Cetatii - Final Sprint (Catan-like)
 
 Joc tip Catan **peaceful** (fara hot, fara furt, fara atacuri).
 
