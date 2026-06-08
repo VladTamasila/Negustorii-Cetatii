@@ -6,7 +6,7 @@ Stack: PHP 8.1+ / Slim 4 / PHP-DI / PDO / MySQL (XAMPP) + Guzzle (testare).
 
 ---
 
-## Noutati (Sprint #4)
+## Noutati (Final Sprint)
 
 Fata de Sprint #3 s-au adaugat: server public prin **ngrok**, **notificari
 asincrone**, **autentificare + ACL** cu panou de **admin**, **teste Gherkin**,
