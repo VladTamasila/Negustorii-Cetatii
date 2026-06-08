@@ -169,7 +169,7 @@ Toate operatiile sunt **implementate** (nu mai sunt marcate ca planificate).
 
 ---
 
-## 5. Testare (Sprint #3)
+## 5. Testare 
 
 Profesorul cere un **scenariu de testare cu transfer automat de proprietati
 intre pasi**. Sunt 3 variante pregatite + optiunea browser dev mode.
@@ -255,7 +255,7 @@ UI-ul consuma **toate** endpoint-urile API (GET, POST, PUT, DELETE).
 
 ---
 
-## 8. Pachete noi adaugate in Sprint #3
+## 8. Pachete noi adaugate in Final Sprint
 
 | Pachet | Scop |
 | --- | --- |
