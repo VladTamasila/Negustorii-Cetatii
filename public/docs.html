@@ -38,6 +38,13 @@
         tryItOutEnabled: true,
         // Sortam operatiile alfabetic in cadrul fiecarui tag - mai usor de gasit
         operationsSorter: 'alpha',
+        // Adaugam header-ul ngrok pe fiecare cerere (inclusiv incarcarea spec-ului
+        // /openapi si apelurile "Try it out"), ca tunelul ngrok free sa nu raspunda
+        // cu pagina de avertisment in loc de continutul real.
+        requestInterceptor: (req) => {
+            req.headers['ngrok-skip-browser-warning'] = 'true';
+            return req;
+        },
     });
 </script>
 </body>

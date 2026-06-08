@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Negustorii Cetatii - Administrare</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpolygon points='8,1 14,4.5 14,11.5 8,15 2,11.5 2,4.5' fill='%23c69b40'/%3E%3C/svg%3E">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; margin: 0; background: #1a1a1a; color: #eee; min-height: 100vh; }
+        header { background: #2a1810; padding: 12px 24px; border-bottom: 3px solid #c69b40;
+            display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; color: #c69b40; font-size: 20px; }
+        a { color: #c69b40; }
+        main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+        .panel { background: #2a2a2a; border-radius: 8px; padding: 16px; border: 1px solid #3a3a3a; margin-bottom: 16px; }
+        .panel h2 { margin: 0 0 12px; color: #c69b40; font-size: 16px; }
+        input, select, button { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid #444;
+            background: #1f1f1f; color: #eee; }
+        button { background: #c69b40; color: #1a1a1a; border: none; cursor: pointer; font-weight: bold; }
+        button.secundar { background: #3a3a3a; color: #eee; }
+        button.rosu { background: #803535; color: #eee; }
+        button:hover { filter: brightness(1.1); }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #3a3a3a; }
+        th { color: #999; font-weight: normal; font-size: 12px; text-transform: uppercase; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+        .stat { background: #1f1f1f; border-radius: 6px; padding: 12px; border-left: 3px solid #c69b40; }
+        .stat .nr { font-size: 24px; font-weight: bold; color: #c69b40; }
+        .stat .et { font-size: 12px; color: #999; }
+        .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #3a3a3a; }
+        .badge.admin { background: #c69b40; color: #1a1a1a; }
+        .mesaj { padding: 10px; border-radius: 6px; margin: 8px 0; }
+        .mesaj.err { background: #5a2a2a; }
+        .mesaj.ok  { background: #2a5a2a; }
+        #ecranLogin { max-width: 360px; margin: 60px auto; }
+        .ascuns { display: none !important; }
+        small.help { color: #888; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Negustorii Cetatii - Administrare</h1>
+    <div class="row">
+        <a href="/">&larr; Inapoi la joc</a>
+        <button id="btnLogout" class="secundar ascuns" onclick="logout()">Logout</button>
+    </div>
+</header>
+
+<main>
+    <div id="mesaj"></div>
+
+    <!-- Ecran de login (vizibil cand nu esti autentificat) -->
+    <div id="ecranLogin" class="panel">
+        <h2>Autentificare</h2>
+        <div class="row" style="flex-direction: column; align-items: stretch;">
+            <input id="inUtilizator" placeholder="Utilizator" autocomplete="username">
+            <input id="inParola" type="password" placeholder="Parola" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter') login()">
+            <button onclick="login()">Intra</button>
+            <small class="help">Cont implicit: admin / admin123</small>
+        </div>
+    </div>
+
+    <!-- Panoul de admin (vizibil dupa login) -->
+    <div id="ecranAdmin" class="ascuns">
+
+        <div class="panel">
+            <h2>Statistici</h2>
+            <div id="statistici" class="stat-grid"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Utilizatori</h2>
+            <table>
+                <thead><tr><th>ID</th><th>Utilizator</th><th>Rol</th><th>Creat</th><th></th></tr></thead>
+                <tbody id="tabelUtilizatori"></tbody>
+            </table>
+            <h3 style="font-size:14px; color:#999; margin-top:16px;">Adauga utilizator</h3>
+            <div class="row">
+                <input id="nouUtilizator" placeholder="Utilizator">
+                <input id="nouParola" type="password" placeholder="Parola (min 6)">
+                <select id="nouRol">
+                    <option value="jucator">jucator</option>
+                    <option value="admin">admin</option>
+                </select>
+                <button onclick="creeazaUtilizator()">Creeaza</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Partide</h2>
+            <table>
+                <thead><tr><th>ID</th><th>Nume</th><th>Status</th><th>Faza</th><th></th></tr></thead>
+                <tbody id="tabelPartide"></tbody>
+            </table>
+        </div>
+
+    </div>
+</main>
+
+<script>
+// ============================================================
+//  Stare locala: token-ul si rolul, pastrate intre refresh-uri.
+// ============================================================
+let token = localStorage.getItem('admin_token');
+let rol   = localStorage.getItem('admin_rol');
+
+// Wrapper peste fetch care adauga automat token-ul (daca exista) si
+// header-ul pentru ngrok. Arunca eroare cu mesajul din JSON la status != 2xx.
+async function api(metoda, ruta, body = null) {
+    const headers = { 'ngrok-skip-browser-warning': 'true' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    if (body !== null) headers['Content-Type'] = 'application/json';
+
+    const r = await fetch('/api' + ruta, {
+        method: metoda,
+        headers,
+        body: body !== null ? JSON.stringify(body) : undefined,
+    });
+    const text = await r.text();
+    const date = text ? JSON.parse(text) : null;
+
+    // Token expirat / invalid -> ne intoarcem la login
+    if (r.status === 401) { logout(); throw new Error('Sesiune expirata. Logheaza-te din nou.'); }
+    if (!r.ok) throw new Error(date?.mesaj || ('Eroare HTTP ' + r.status));
+    return date;
+}
+
+function arataMesaj(text, tip = 'ok') {
+    const el = document.getElementById('mesaj');
+    el.innerHTML = '<div class="mesaj ' + tip + '">' + text + '</div>';
+    if (tip === 'ok') setTimeout(() => el.innerHTML = '', 3500);
+}
+
+// ============================================================
+//  Login / logout
+// ============================================================
+async function login() {
+    const utilizator = document.getElementById('inUtilizator').value.trim();
+    const parola     = document.getElementById('inParola').value;
+    if (!utilizator || !parola) return arataMesaj('Completeaza utilizator si parola.', 'err');
+    try {
+        const r = await api('POST', '/auth/login', { utilizator, parola });
+        if (r.rol !== 'admin') { return arataMesaj('Contul nu are drepturi de admin.', 'err'); }
+        token = r.token; rol = r.rol;
+        localStorage.setItem('admin_token', token);
+        localStorage.setItem('admin_rol', rol);
+        document.getElementById('inParola').value = '';
+        intraInPanou();
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function logout() {
+    try { if (token) await api('POST', '/auth/logout'); } catch (e) { /* ignor */ }
+    token = null; rol = null;
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_rol');
+    document.getElementById('ecranAdmin').classList.add('ascuns');
+    document.getElementById('ecranLogin').classList.remove('ascuns');
+    document.getElementById('btnLogout').classList.add('ascuns');
+}
+
+function intraInPanou() {
+    document.getElementById('ecranLogin').classList.add('ascuns');
+    document.getElementById('ecranAdmin').classList.remove('ascuns');
+    document.getElementById('btnLogout').classList.remove('ascuns');
+    reincarcaTot();
+}
+
+// ============================================================
+//  Incarcare date
+// ============================================================
+async function reincarcaTot() {
+    await Promise.all([incarcaStatistici(), incarcaUtilizatori(), incarcaPartide()]);
+}
+
+async function incarcaStatistici() {
+    try {
+        const s = await api('GET', '/admin/statistici');
+        const statusuri = Object.entries(s.partide.peStatus)
+            .map(([k, v]) => k + ': ' + v).join(', ') || '-';
+        document.getElementById('statistici').innerHTML = `
+            <div class="stat"><div class="nr">${s.partide.total}</div><div class="et">partide (${statusuri})</div></div>
+            <div class="stat"><div class="nr">${s.jucatori}</div><div class="et">jucatori</div></div>
+            <div class="stat"><div class="nr">${s.mutari}</div><div class="et">mutari/evenimente</div></div>
+            <div class="stat"><div class="nr">${s.utilizatori.total}</div><div class="et">utilizatori (${s.utilizatori.admini} admin)</div></div>
+        `;
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function incarcaUtilizatori() {
+    try {
+        const d = await api('GET', '/admin/utilizatori');
+        document.getElementById('tabelUtilizatori').innerHTML = d.items.map(u => `
+            <tr>
+                <td>${u.id}</td>
+                <td>${esc(u.utilizator)}</td>
+                <td><span class="badge ${u.rol === 'admin' ? 'admin' : ''}">${u.rol}</span></td>
+                <td><small class="help">${esc(u.createdAt || '')}</small></td>
+                <td>
+                    <button class="secundar" onclick="reseteazaParola(${u.id}, '${esc(u.utilizator)}')">Parola</button>
+                    <button class="rosu" onclick="stergeUtilizator(${u.id}, '${esc(u.utilizator)}')">Sterge</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function incarcaPartide() {
+    try {
+        const d = await api('GET', '/partide?dimensiunePagina=100');
+        const lista = d.items || d;
+        document.getElementById('tabelPartide').innerHTML = lista.map(p => `
+            <tr>
+                <td>${p.id}</td>
+                <td>${esc(p.nume)}</td>
+                <td><span class="badge">${p.status}</span></td>
+                <td>${esc(p.faza || '-')}</td>
+                <td><button class="rosu" onclick="stergePartida(${p.id}, '${esc(p.nume)}')">Sterge</button></td>
+            </tr>
+        `).join('') || '<tr><td colspan="5"><small class="help">Nicio partida.</small></td></tr>';
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+// ============================================================
+//  Actiuni
+// ============================================================
+async function creeazaUtilizator() {
+    const utilizator = document.getElementById('nouUtilizator').value.trim();
+    const parola     = document.getElementById('nouParola').value;
+    const rolNou     = document.getElementById('nouRol').value;
+    if (!utilizator || !parola) return arataMesaj('Completeaza utilizator si parola.', 'err');
+    try {
+        await api('POST', '/admin/utilizatori', { utilizator, parola, rol: rolNou });
+        document.getElementById('nouUtilizator').value = '';
+        document.getElementById('nouParola').value = '';
+        arataMesaj('Utilizator creat.');
+        incarcaUtilizatori(); incarcaStatistici();
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function reseteazaParola(id, nume) {
+    const parola = prompt('Parola noua pentru "' + nume + '" (minim 6 caractere):');
+    if (!parola) return;
+    try {
+        await api('PUT', '/admin/utilizatori/' + id + '/parola', { parola });
+        arataMesaj('Parola a fost resetata pentru ' + nume + '.');
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function stergeUtilizator(id, nume) {
+    if (!confirm('Stergi utilizatorul "' + nume + '"?')) return;
+    try {
+        await api('DELETE', '/admin/utilizatori/' + id);
+        arataMesaj('Utilizator sters.');
+        incarcaUtilizatori(); incarcaStatistici();
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function stergePartida(id, nume) {
+    if (!confirm('Stergi partida "' + nume + '"?')) return;
+    try {
+        await api('DELETE', '/partide/' + id);
+        arataMesaj('Partida stearsa/arhivata.');
+        incarcaPartide(); incarcaStatistici();
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+}
+
+// La incarcarea paginii: daca avem deja un token salvat, intram direct in panou.
+if (token && rol === 'admin') intraInPanou();
+</script>
+
+</body>
+</html>

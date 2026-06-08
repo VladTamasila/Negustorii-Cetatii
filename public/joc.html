@@ -63,13 +63,32 @@
         .asezare { stroke: #1a1a1a; stroke-width: 1.5; }
         .cetate  { stroke: #1a1a1a; stroke-width: 1.5; }
         .drum    { stroke-width: 6; stroke-linecap: round; }
+
+        /* Notificari live (toast-uri in colt) - apar cand alt jucator face o mutare */
+        #notificariLive { position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
+        .toast { background: #2a2a2a; border-left: 4px solid #c69b40; border-radius: 6px;
+            padding: 10px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); color: #eee;
+            font-size: 13px; animation: toastIn .25s ease; }
+        .toast .toast-jucator { font-weight: bold; color: #c69b40; }
+        .toast.tip-castig { border-left-color: #4ac84a; }
+        .toast.tip-start  { border-left-color: #3a8ad8; }
+        .toast.tip-alaturare { border-left-color: #888; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
     </style>
 </head>
 <body>
 
-<header>
-    <h1>Negustorii Cetatii</h1>
-    <small>Catan-like peaceful: zar, asezari pe colturi, drumuri pe muchii, fara hot</small>
+<!-- Container pentru notificarile live (toast-uri); umplut din JS -->
+<div id="notificariLive"></div>
+
+<header style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px">
+    <div>
+        <h1>Negustorii Cetatii</h1>
+        <small>Catan-like peaceful: zar, asezari pe colturi, drumuri pe muchii, fara hot</small>
+    </div>
+    <!-- Zona de autentificare (login pentru chat); umpluta din JS -->
+    <div id="zonaAuth" style="font-size:13px; text-align:right"></div>
 </header>
 
 <main>
@@ -143,6 +162,17 @@
             <h2>Istoric</h2>
             <div id="listaMutari" class="istoric"></div>
         </div>
+
+        <!-- Componenta sociala: chat live intre jucatorii dintr-o partida -->
+        <div class="panel" id="panelChat" style="margin-top:8px; display:none">
+            <h2>Chat</h2>
+            <div id="listaChat" class="istoric" style="max-height:180px; overflow:auto"></div>
+            <div class="row" style="margin-top:6px">
+                <input id="textChat" placeholder="Scrie un mesaj..." maxlength="500"
+                       onkeydown="if(event.key==='Enter') trimiteChat()">
+                <button onclick="trimiteChat()">Trimite</button>
+            </div>
+        </div>
     </aside>
 </main>
 
@@ -166,9 +196,20 @@ const TERRAIN_IMAGES = {
 
 let pollingInterval = null;
 let reincarcaInProgress = false;
+let ultimaNotificareId = null;  // ultimul id de notificare vazut (cursor pentru polling)
+let ultimChatId = 0;            // ultimul id de mesaj de chat afisat
+
+// Autentificare (pentru chat): tinem token-ul si numele contului logat.
+let authToken = localStorage.getItem('joc_token');
+let authUser  = localStorage.getItem('joc_user');
 
 async function api(metoda, ruta, body = null) {
-    const optiuni = { method: metoda, headers: {} };
+    // Header-ul 'ngrok-skip-browser-warning' face ca tunelul ngrok (free) sa
+    // NU mai raspunda cu pagina HTML de avertisment, ci direct cu JSON-ul nostru.
+    // Pe localhost nu strica nimic - serverul il ignora pur si simplu.
+    const optiuni = { method: metoda, headers: { 'ngrok-skip-browser-warning': 'true' } };
+    // Daca suntem logati, trimitem token-ul (necesar pentru a scrie in chat).
+    if (authToken) optiuni.headers['Authorization'] = 'Bearer ' + authToken;
     if (body !== null && body !== undefined) {
         optiuni.headers['Content-Type'] = 'application/json';
         optiuni.body = JSON.stringify(body);
@@ -257,7 +298,16 @@ async function selecteazaPartida(id) {
         } else { harta = null; }
         randeaza();
         incarcaIstoric();
-        if (['asezare_initiala', 'joc'].includes(partidaCurenta.faza)) startPolling();
+        // Resetam cursorul de notificari si sincronizam o data "silentios"
+        // (memoram unde suntem, fara sa afisam tot istoricul ca toast-uri).
+        ultimaNotificareId = null;
+        verificaNotificari(true);
+        // Chat: aratam panoul si incarcam mesajele de la inceput.
+        ultimChatId = 0;
+        document.getElementById('listaChat').innerHTML = '';
+        document.getElementById('panelChat').style.display = 'block';
+        incarcaChat();
+        if (partidaCurenta.faza !== 'finalizata') startPolling();
     } catch (e) { arataMesaj(e.message, 'err'); }
 }
 
@@ -271,6 +321,8 @@ async function reincarca() {
         }
         randeaza();
         incarcaIstoric();
+        verificaNotificari();  // afiseaza ca toast ce s-a intamplat de la ultimul poll
+        incarcaChat();         // aduce mesajele noi de chat
         if (partidaCurenta.faza === 'finalizata') stopPolling();
     } finally { reincarcaInProgress = false; }
 }
@@ -589,6 +641,125 @@ async function incarcaIstoric() {
     } catch (e) { /* ignor */ }
 }
 
+// ----- Notificari asincrone -----
+// Intreaba serverul ce evenimente noi au aparut de la ultimul id vazut.
+// silent=true (la deschiderea partidei): doar memoreaza cursorul, fara toast-uri.
+async function verificaNotificari(silent = false) {
+    if (!partidaCurenta) return;
+    try {
+        const dupa = ultimaNotificareId ?? 0;
+        const r = await api('GET', '/partide/' + partidaCurenta.id + '/notificari?dupa=' + dupa);
+        const primaSincronizare = (ultimaNotificareId === null);
+        ultimaNotificareId = r.ultimulId;
+        if (silent || primaSincronizare) return;
+        for (const n of r.notificari) afiseazaToast(n);
+    } catch (e) { /* erorile de polling le ignoram, nu deranjam jucatorul */ }
+}
+
+// Afiseaza o notificare ca toast in coltul din dreapta-jos, care dispare singur.
+function afiseazaToast(n) {
+    const cont = document.getElementById('notificariLive');
+    if (!cont) return;
+    const div = document.createElement('div');
+    div.className = 'toast tip-' + n.tip;
+    if (n.culoare && CULORI[n.culoare]) div.style.borderLeftColor = CULORI[n.culoare];
+    div.textContent = n.mesaj || '';
+    cont.appendChild(div);
+    setTimeout(() => {
+        div.style.transition = 'opacity .4s';
+        div.style.opacity = '0';
+        setTimeout(() => div.remove(), 400);
+    }, 6000);
+}
+
+// ----- Autentificare (pentru chat) -----
+// Deseneaza zona din header: formular de login, sau "Logat ca X · Logout".
+function randeazaAuth() {
+    const z = document.getElementById('zonaAuth');
+    if (authToken) {
+        z.innerHTML = 'Logat ca <b>' + escapeHtml(authUser || '') + '</b> '
+            + '<a href="/admin" target="_blank" style="color:#c69b40; margin:0 6px">Admin</a>'
+            + '<button class="secundar" style="font-size:11px; padding:3px 8px" onclick="logoutJoc()">Logout</button>';
+    } else {
+        z.innerHTML =
+            '<input id="authUtilizator" placeholder="utilizator" style="width:100px; font-size:12px; padding:4px">'
+          + '<input id="authParola" type="password" placeholder="parola" style="width:90px; font-size:12px; padding:4px; margin:0 4px"'
+          + ' onkeydown="if(event.key===\'Enter\') loginJoc()">'
+          + '<button style="font-size:11px; padding:3px 8px" onclick="loginJoc()">Login</button>'
+          + '<button class="secundar" style="font-size:11px; padding:3px 8px; margin-left:4px" onclick="inregistreazaJoc()">Cont nou</button>';
+    }
+}
+
+async function loginJoc() {
+    const utilizator = document.getElementById('authUtilizator').value.trim();
+    const parola     = document.getElementById('authParola').value;
+    if (!utilizator || !parola) return arataMesaj('Completeaza utilizator si parola.', 'err');
+    try {
+        const r = await api('POST', '/auth/login', { utilizator, parola });
+        authToken = r.token; authUser = r.utilizator;
+        localStorage.setItem('joc_token', authToken);
+        localStorage.setItem('joc_user', authUser);
+        localStorage.setItem('joc_rol', r.rol);
+        randeazaAuth();
+        arataMesaj('Bine ai venit, ' + authUser + '!');
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+// Inregistrare self-service: creeaza un cont nou (rol jucator) si te logheaza direct.
+async function inregistreazaJoc() {
+    const utilizator = document.getElementById('authUtilizator').value.trim();
+    const parola     = document.getElementById('authParola').value;
+    if (!utilizator || !parola) return arataMesaj('Alege un utilizator si o parola (min 6 caractere).', 'err');
+    try {
+        const r = await api('POST', '/auth/register', { utilizator, parola });
+        authToken = r.token; authUser = r.utilizator;
+        localStorage.setItem('joc_token', authToken);
+        localStorage.setItem('joc_user', authUser);
+        localStorage.setItem('joc_rol', r.rol);
+        randeazaAuth();
+        arataMesaj('Cont creat. Bine ai venit, ' + authUser + '!');
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
+async function logoutJoc() {
+    try { if (authToken) await api('POST', '/auth/logout'); } catch (e) { /* ignor */ }
+    authToken = null; authUser = null;
+    localStorage.removeItem('joc_token');
+    localStorage.removeItem('joc_user');
+    localStorage.removeItem('joc_rol');
+    randeazaAuth();
+}
+
+// Aduce mesajele noi (dupa ultimul id vazut) si le adauga in lista.
+async function incarcaChat() {
+    if (!partidaCurenta) return;
+    try {
+        const r = await api('GET', '/partide/' + partidaCurenta.id + '/chat?dupa=' + ultimChatId);
+        const lista = document.getElementById('listaChat');
+        for (const m of r.mesaje) {
+            const div = document.createElement('div');
+            div.className = 'mutare';
+            div.innerHTML = '<span class="tip">' + escapeHtml(m.autor) + '</span>' + escapeHtml(m.text);
+            lista.appendChild(div);
+        }
+        if (r.mesaje.length) { ultimChatId = r.ultimulId; lista.scrollTop = lista.scrollHeight; }
+    } catch (e) { /* ignor erorile de polling */ }
+}
+
+// Trimite un mesaj nou in chat-ul partidei curente.
+async function trimiteChat() {
+    const input = document.getElementById('textChat');
+    const text = input.value.trim();
+    if (!text || !partidaCurenta) return;
+    if (!authToken) return arataMesaj('Logheaza-te (coltul din dreapta sus) ca sa scrii in chat.', 'err');
+    try {
+        // Nu mai trimitem autorul - serverul il ia din contul logat (token).
+        await api('POST', '/partide/' + partidaCurenta.id + '/chat', { text });
+        input.value = '';
+        await incarcaChat(); // aducem imediat propriul mesaj
+    } catch (e) { arataMesaj(e.message, 'err'); }
+}
+
 function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c =>
         ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
@@ -619,6 +790,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
+randeazaAuth();
 incarcaPartide();
 </script>
 

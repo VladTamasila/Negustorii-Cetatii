@@ -102,6 +102,10 @@ final class JocService
         $primul = $jucatori[0];
         $this->partide->pornesteSetup($idPartida, (int) $primul['id']);
 
+        // Notificare async: partida a pornit, incepe asezarea initiala.
+        $this->mutari->create($idPartida, (int) $primul['id'], 'start', [],
+            'Partida a pornit! Incepe asezarea initiala.', 0);
+
         return $this->partide->findById($idPartida) ?? [];
     }
 
@@ -547,6 +551,14 @@ final class JocService
     {
         if ($prestigiu >= $prag) {
             $this->partide->finalizeaza($idPartida, $idJucator);
+
+            // Notificare async: anunta toti jucatorii ca partida s-a terminat.
+            $invingator = $this->jucatori->findById($idJucator);
+            $this->mutari->create($idPartida, $idJucator, 'castig', ['prestigiu' => $prestigiu],
+                sprintf('%s a castigat partida cu %d prestigiu!',
+                    $invingator['nume'] ?? 'Jucatorul', $prestigiu),
+                0
+            );
         }
     }
 

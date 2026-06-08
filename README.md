@@ -6,6 +6,22 @@ Stack: PHP 8.1+ / Slim 4 / PHP-DI / PDO / MySQL (XAMPP) + Guzzle (testare).
 
 ---
 
+## Noutati (Sprint #4)
+
+Fata de Sprint #3 s-au adaugat: server public prin **ngrok**, **notificari
+asincrone**, **autentificare + ACL** cu panou de **admin**, **teste Gherkin**,
+**chat** (social), endpoint **SOAP** si **template-ing** integrat in REST.
+
+Detalii complete + cum se testeaza/prezinta fiecare: vezi
+[`docs/IMBUNATATIRI.md`](docs/IMBUNATATIRI.md).
+
+**Important:** ruleaza o data migrarile pe baza existenta (in phpMyAdmin):
+`database/migratie_notificari.sql`, `database/migratie_auth.sql`,
+`database/migratie_social.sql`. (Pe o baza noua nu e nevoie - sunt deja in
+`schema.sql`.) Cont admin implicit: `admin` / `admin123` (la `/admin`).
+
+---
+
 ## 1. Reguli pe scurt
 
 - 19 hexagoane in stil Catan (3-4-5-4-3 randuri).

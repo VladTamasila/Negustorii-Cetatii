@@ -22,4 +22,9 @@ return [
         $settings = $c->get('settings');
         return Connection::get($settings['db']);
     },
+
+    // Motorul de template-ing - stie unde sunt fisierele .html din templates/
+    App\Services\Template::class => function (): App\Services\Template {
+        return new App\Services\Template(__DIR__ . '/../templates');
+    },
 ];

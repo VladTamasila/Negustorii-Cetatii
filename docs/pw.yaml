@@ -26,6 +26,10 @@ tags:
 - name: Harta
 - name: Setup
 - name: Mutari
+- name: Autentificare
+- name: Admin
+- name: Notificari
+- name: Chat
 paths:
   /api/ping:
     get:
@@ -549,6 +553,166 @@ paths:
                 $ref: '#/components/schemas/PassTurnResponse'
         '400':
           $ref: '#/components/responses/MutareInvalida'
+  /api/auth/login:
+    post:
+      tags:
+      - Autentificare
+      summary: Autentificare - obtine un token
+      operationId: authLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [utilizator, parola]
+              properties:
+                utilizator: { type: string }
+                parola: { type: string }
+      responses:
+        '200':
+          description: Token de autentificare.
+        '401':
+          description: Utilizator sau parola gresita.
+  /api/auth/logout:
+    post:
+      tags:
+      - Autentificare
+      summary: Logout (necesita Authorization Bearer)
+      operationId: authLogout
+      responses:
+        '204':
+          description: Sesiune incheiata.
+        '401':
+          description: Token lipsa sau invalid.
+  /api/auth/eu:
+    get:
+      tags:
+      - Autentificare
+      summary: Utilizatorul curent (necesita Authorization Bearer)
+      operationId: authEu
+      responses:
+        '200':
+          description: Datele contului curent.
+        '401':
+          description: Token lipsa sau invalid.
+  /api/admin/statistici:
+    get:
+      tags:
+      - Admin
+      summary: Statistici globale (doar admin)
+      operationId: adminStatistici
+      responses:
+        '200':
+          description: Sumar al aplicatiei.
+        '403':
+          description: Necesita rol de admin.
+  /api/admin/utilizatori:
+    get:
+      tags:
+      - Admin
+      summary: Lista utilizatorilor (doar admin)
+      operationId: adminListaUtilizatori
+      responses:
+        '200':
+          description: Lista conturilor.
+        '403':
+          description: Necesita rol de admin.
+    post:
+      tags:
+      - Admin
+      summary: Creeaza un utilizator (doar admin)
+      operationId: adminCreeazaUtilizator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [utilizator, parola]
+              properties:
+                utilizator: { type: string }
+                parola: { type: string, minLength: 6 }
+                rol: { type: string, enum: [admin, jucator] }
+      responses:
+        '201':
+          description: Utilizator creat.
+        '409':
+          description: Numele de utilizator exista deja.
+  /api/admin/utilizatori/{id}:
+    delete:
+      tags:
+      - Admin
+      summary: Sterge un utilizator (doar admin)
+      operationId: adminStergeUtilizator
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+      responses:
+        '204':
+          description: Utilizator sters.
+        '404':
+          description: Utilizatorul nu exista.
+  /api/partide/{idPartida}/notificari:
+    get:
+      tags:
+      - Notificari
+      summary: Feed de notificari asincrone (polling)
+      operationId: listaNotificari
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      - in: query
+        name: dupa
+        required: false
+        schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Evenimentele noi de la ultimul id vazut.
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+  /api/partide/{idPartida}/chat:
+    get:
+      tags:
+      - Chat
+      summary: Mesajele de chat (polling, componenta sociala)
+      operationId: listaChat
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      - in: query
+        name: dupa
+        required: false
+        schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Mesajele noi de la ultimul id vazut.
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
+    post:
+      tags:
+      - Chat
+      summary: Trimite un mesaj in chat
+      operationId: trimiteChat
+      parameters:
+      - $ref: '#/components/parameters/idPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                autor: { type: string }
+                text: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Mesaj trimis.
+        '400':
+          $ref: '#/components/responses/CerereInvalida'
+        '404':
+          $ref: '#/components/responses/PartidaInexistenta'
 components:
   parameters:
     idPartida:

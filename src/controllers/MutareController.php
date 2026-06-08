@@ -35,6 +35,45 @@ final class MutareController
         return $this->json($response, ['items' => $items, 'total' => count($items)]);
     }
 
+    /**
+     * GET /api/partide/{idPartida}/notificari?dupa={ultimulId}
+     *
+     * Feed de notificari asincrone. Clientul trimite `dupa` = ultimul id de
+     * notificare pe care l-a vazut; serverul intoarce doar evenimentele mai noi.
+     * UI-ul face polling la cateva secunde si afiseaza ce au facut ceilalti
+     * jucatori (mutari, alaturari, start, castig) - notificare push fara reload.
+     */
+    public function notificari(Request $request, Response $response, array $args): Response
+    {
+        $id = $this->idValid($args);
+        if ($id === null) return $this->jsonError($response, 400, 'CERERE_INVALIDA', 'idPartida invalid.');
+        if ($this->partide->findById($id) === null) {
+            return $this->jsonError($response, 404, 'PARTIDA_INEXISTENTA', 'Partida nu exista.');
+        }
+
+        $dupa = (int) ($request->getQueryParams()['dupa'] ?? 0);
+        $rows = $this->mutari->findNoiDupa($id, $dupa);
+
+        $notificari = array_map(static function (array $r): array {
+            return [
+                'id'        => (int) $r['id'],
+                'tip'       => $r['tip'],
+                'mesaj'     => $r['mesaj'],
+                'jucator'   => $r['jucator_nume'],
+                'culoare'   => $r['jucator_culoare'] ?? null,
+                'createdAt' => $r['created_at'],
+            ];
+        }, $rows);
+
+        // ultimulId = cel mai mare id trimis; clientul il va folosi la urmatorul poll.
+        $ultimulId = empty($notificari) ? $dupa : end($notificari)['id'];
+
+        return $this->json($response, [
+            'notificari' => $notificari,
+            'ultimulId'  => $ultimulId,
+        ]);
+    }
+
     /** GET /api/partide/{idPartida}/mutari/{idMutare} */
     public function detalii(Request $request, Response $response, array $args): Response
     {

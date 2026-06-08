@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Rezumat: {{ partida.nume }}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #1a1a1a; color: #eee; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+        h1, h2 { color: #c69b40; }
+        table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #3a3a3a; }
+        th { color: #999; font-size: 12px; text-transform: uppercase; }
+        ul { line-height: 1.6; }
+        a { color: #c69b40; }
+        .meta { color: #888; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <h1>{{ partida.nume }}</h1>
+    <p class="meta">Status: {{ partida.status }} &nbsp;|&nbsp; Faza: {{ partida.faza }} &nbsp;|&nbsp; ID: {{ partida.id }}</p>
+
+    <h2>Jucatori</h2>
+    <table>
+        <tr><th>Nume</th><th>Culoare</th><th>Prestigiu</th></tr>
+        {{#each jucatori}}
+        <tr><td>{{ nume }}</td><td>{{ culoare }}</td><td>{{ prestigiu }}</td></tr>
+        {{/each}}
+    </table>
+
+    <h2>Ultimele evenimente</h2>
+    <ul>
+        {{#each evenimente}}
+        <li><b>{{ tip }}</b> &mdash; {{ mesaj }}</li>
+        {{/each}}
+    </ul>
+
+    <p class="meta">Pagina generata din template la {{ generatLa }}.</p>
+    <p><a href="/">&larr; Inapoi la joc</a></p>
+</body>
+</html>

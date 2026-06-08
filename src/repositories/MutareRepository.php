@@ -50,6 +50,28 @@ final class MutareRepository
         return $row === false ? null : $row;
     }
 
+    /**
+     * Notificari asincrone: intoarce mutarile NOI (cu id > $dupaId), in ordine
+     * cronologica (cele mai vechi primele). Clientii fac polling cu ultimul id
+     * pe care l-au vazut si primesc doar ce s-a intamplat intre timp - asa afla
+     * ce au facut ceilalti jucatori fara sa ceara explicit acea actiune.
+     */
+    public function findNoiDupa(int $idPartida, int $dupaId, int $limita = 50): array
+    {
+        $sql = "SELECT m.*, j.nume AS jucator_nume, j.culoare AS jucator_culoare
+                FROM mutari m
+                JOIN jucatori j ON j.id = m.jucator_id
+                WHERE m.partida_id = :id AND m.id > :dupa
+                ORDER BY m.id ASC
+                LIMIT :limita";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->bindValue(':id',     $idPartida, PDO::PARAM_INT);
+        $stmt->bindValue(':dupa',   $dupaId,    PDO::PARAM_INT);
+        $stmt->bindValue(':limita', $limita,    PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     public function findByPartida(int $idPartida, int $limita = 50): array
     {
         $sql = "SELECT m.*, j.nume AS jucator_nume FROM mutari m

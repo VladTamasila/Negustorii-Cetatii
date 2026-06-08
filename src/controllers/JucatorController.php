@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Repositories\JucatorRepository;
+use App\Repositories\MutareRepository;
 use App\Repositories\PartidaRepository;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -25,6 +26,7 @@ final class JucatorController
     public function __construct(
         private readonly PartidaRepository $partide,
         private readonly JucatorRepository $jucatori,
+        private readonly MutareRepository $mutari,
     ) {}
 
     public function lista(Request $request, Response $response, array $args): Response
@@ -72,6 +74,11 @@ final class JucatorController
         }
 
         $id = $this->jucatori->create($idPartida, $nume, $culoare);
+
+        // Notificare async: anunta ceilalti ca un jucator nou s-a alaturat in lobby.
+        $this->mutari->create($idPartida, $id, 'alaturare', ['idJucator' => $id],
+            sprintf('%s s-a alaturat partidei.', $nume), 0);
+
         return $this->json($response, $this->mapJucator($this->jucatori->findById($id)), 201);
     }
 

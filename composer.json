@@ -21,5 +21,9 @@
     },
     "config": {
         "sort-packages": true
+    },
+    "scripts": {
+        "test": "php tests/scenariu.php",
+        "gherkin": "php tests/gherkin.php"
     }
 }

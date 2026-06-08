@@ -13,6 +13,9 @@
 -- Stergem tabelele in ordine inversa fata de cheile straine.
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS `mesaje_chat`;
+DROP TABLE IF EXISTS `sesiuni`;
+DROP TABLE IF EXISTS `utilizatori`;
 DROP TABLE IF EXISTS `drumuri`;
 DROP TABLE IF EXISTS `asezari`;
 DROP TABLE IF EXISTS `hexagon_varfuri`;
@@ -223,7 +226,8 @@ CREATE TABLE `mutari` (
     `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `partida_id`    INT UNSIGNED NOT NULL,
     `jucator_id`    INT UNSIGNED NOT NULL,
-    `tip`           ENUM('zar', 'asezare', 'drum', 'cetate', 'paseaza', 'tribut')
+    `tip`           ENUM('zar', 'asezare', 'drum', 'cetate', 'paseaza', 'tribut',
+                         'alaturare', 'start', 'castig')
                                  NOT NULL,
     `payload_json`  JSON         NULL,
     `mesaj`         VARCHAR(255) NULL,
@@ -237,5 +241,53 @@ CREATE TABLE `mutari` (
         ON DELETE CASCADE,
     CONSTRAINT `fk_mutari_jucator`
         FOREIGN KEY (`jucator_id`) REFERENCES `jucatori`(`id`)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================================
+-- utilizatori - conturi de login (ACL pe baza de rol: admin / jucator)
+-- =====================================================================
+CREATE TABLE `utilizatori` (
+    `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `utilizator`   VARCHAR(40)  NOT NULL,
+    `parola_hash`  VARCHAR(255) NOT NULL,                 -- hash bcrypt, niciodata in clar
+    `rol`          ENUM('admin', 'jucator') NOT NULL DEFAULT 'jucator',
+    `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_utilizator` (`utilizator`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================================
+-- sesiuni - token-ele active de autentificare (Bearer token cu expirare)
+-- =====================================================================
+CREATE TABLE `sesiuni` (
+    `token`         CHAR(64)     NOT NULL,
+    `utilizator_id` INT UNSIGNED NOT NULL,
+    `expira_la`     DATETIME     NOT NULL,
+    `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`token`),
+    KEY `idx_sesiuni_utilizator` (`utilizator_id`),
+    CONSTRAINT `fk_sesiuni_utilizator`
+        FOREIGN KEY (`utilizator_id`) REFERENCES `utilizatori`(`id`)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cont de admin implicit (parola: admin123 - schimb-o dupa primul login).
+INSERT INTO `utilizatori` (`utilizator`, `parola_hash`, `rol`) VALUES
+    ('admin', '$2y$10$XFZ6tllzi5l7wzrSH2X/l.XsvkWqatWo3UCl5sMrq6vvuxnEeH.ri', 'admin');
+
+-- =====================================================================
+-- mesaje_chat - componenta sociala: chat-ul jucatorilor dintr-o partida
+-- =====================================================================
+CREATE TABLE `mesaje_chat` (
+    `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `partida_id` INT UNSIGNED NOT NULL,
+    `autor`      VARCHAR(40)  NOT NULL,
+    `text`       VARCHAR(500) NOT NULL,
+    `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_chat_partida` (`partida_id`),
+    CONSTRAINT `fk_chat_partida`
+        FOREIGN KEY (`partida_id`) REFERENCES `partide`(`id`)
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
